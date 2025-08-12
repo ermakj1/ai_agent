@@ -111,8 +111,7 @@ The tests.py file does not need any arguments
 
             # check if the model response contains a response text (only when no function call round)
             if response.text:
-                if verbose:
-                    print("Assistant response: ", response.text)
+                print("Assistant response: ", response.text)
                 break
 
             # print prompt tokens and response tokens
