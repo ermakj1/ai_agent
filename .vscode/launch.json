@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "uv run and debug --verbose",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": ["how does the calculator render results to the console?", "--verbose"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PATH": "${command:python.interpreterPath}/..${pathSeparator}${env:PATH}"
+            },
+            "python": "${command:python.interpreterPath}"
+        },
+                {
+            "name": "uv run and debug",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": ["which file is the biggest?"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PATH": "${command:python.interpreterPath}/..${pathSeparator}${env:PATH}"
+            },
+            "python": "${command:python.interpreterPath}"
+        }
+
+    ]
+}
