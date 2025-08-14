@@ -8,26 +8,11 @@ from functions.get_files_info import *
 from functions.get_file_content import *
 from functions.write_file import *
 from functions.run_python import *
+from code_debug import code_debug
+from tictactoe import tictactoe
 
 def main():
     print("Hello from ai-agent!")
-
-    system_prompt = """
-You are a helpful AI coding agent.
-
-When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
-
-- List files and directories
-- Read the content of files
-- Write to files
-- Execute Python scripts
-
-All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
-
-To answer questions you will probably need to look at the files in the working directory, read their content, and possibly execute Python scripts. You can also write new files if needed.
-
-The tests.py file does not need any arguments
-"""
 
     # Load environment variables from .env file
     if False == load_dotenv("ai_key.env"):
@@ -46,33 +31,41 @@ The tests.py file does not need any arguments
         exit (1)
 
     verbose = False
+    # Determine which agent to use (defaults to code_debug)
+    agent_name = "code_debug"
+    difficulty = "medium"
     for arg in sys.argv[2:]:
-        if arg == "--verbose":
+        if arg.startswith("--agent="):
+            agent_name = arg.split("=", 1)[1].strip() or "code_debug"
+        elif arg.startswith("--difficulty="):
+            difficulty = arg.split("=", 1)[1].strip() or "medium"
+        elif arg == "--verbose":
             print("Verbose mode enabled.")
             verbose = True
 
 
-    messages = [
-        types.Content(role="user", parts=[types.Part(text=prompt)]),
-    ]
+    # Initialize agent provider
+    if agent_name == "tictactoe":
+        agent = tictactoe(difficulty=difficulty)
+    else:
+        if agent_name != "code_debug":
+            print(f"Unknown agent '{agent_name}', defaulting to code_debug")
+        agent = code_debug()
 
-    system_instruction = types.Content(role="system", parts=[types.Part(text=system_prompt)])
+    # Build config from agent
+    system_prompt = agent.system_prompt
+    available_functions = agent.available_functions
 
-    available_functions = types.Tool(
-        function_declarations=[
-            schema_get_files_info,
-            schema_get_file_content,
-            schema_write_file,
-            schema_run_python_file,
-        ]
-    )
-
-    config=types.GenerateContentConfig(
+    config = types.GenerateContentConfig(
         tools=[available_functions], system_instruction=system_prompt
     )
 
     MAX_LOOPS = 20
     current_loop = 0
+
+    messages = [
+        types.Content(role="user", parts=[types.Part(text=prompt)]),
+    ]
 
     while current_loop < MAX_LOOPS:
         try:
@@ -94,7 +87,7 @@ The tests.py file does not need any arguments
             function_response_parts = []
             if response.function_calls:
                 for function_call_part in response.function_calls:
-                    function_call_result_content = call_function(function_call_part, verbose=verbose)
+                    function_call_result_content = call_function(agent, function_call_part, verbose=verbose)
                     # Each call_function returns a Content with one Part (function_response)
                     if function_call_result_content and function_call_result_content.parts:
                         fr_part = function_call_result_content.parts[0]
@@ -103,7 +96,7 @@ The tests.py file does not need any arguments
                 if function_response_parts:
                     messages.append(
                         types.Content(
-                            role="tool",
+                            role="user",
                             parts=function_response_parts
                         )
                     )
@@ -145,7 +138,7 @@ The tests.py file does not need any arguments
 
 
 
-def call_function(function_call_part, verbose=False):
+def call_function(agent, function_call_part, verbose=False):
     function_name = function_call_part.name
     args = function_call_part.args
 
@@ -162,15 +155,30 @@ def call_function(function_call_part, verbose=False):
     elif function_name == "run_python_file":
         function_result = run_python_file("./calculator", **args)
     else:
-        return types.Content(
-            role="tool",
-            parts=[
-                types.Part.from_function_response(
-                    name=function_name,
-                    response={"error": f"Unknown function: {function_name}"},
+        # Route to agent-specific handler if available
+        if hasattr(agent, "handle_function"):
+            try:
+                function_result = agent.handle_function(function_name, args)
+            except Exception as ex:
+                return types.Content(
+                    role="tool",
+                    parts=[
+                        types.Part.from_function_response(
+                            name=function_name,
+                            response={"error": f"{type(ex).__name__}: {ex}"},
+                        )
+                    ],
                 )
-            ],
-        )  
+        else:
+            return types.Content(
+                role="tool",
+                parts=[
+                    types.Part.from_function_response(
+                        name=function_name,
+                        response={"error": f"Unknown function: {function_name}"},
+                    )
+                ],
+            )
 
     return types.Content(
         role="tool",
